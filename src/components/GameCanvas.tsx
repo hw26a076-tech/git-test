@@ -262,11 +262,137 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [muted, setMuted] = useState<boolean>(audio.getMute());
   const [playSpeed, setPlaySpeed] = useState<number>(1);
 
+  // Extermination Bomb (アース蚊取り爆弾) - Player starts with 3 bombs, max 5.
+  const [bombs, setBombs] = useState<number>(3);
+  const bombsRef = useRef<number>(3);
+  const bombActiveFramesRef = useRef<number>(0);
+
+  const triggerMosquitoBomb = () => {
+    if (bombsRef.current <= 0) {
+      spawnTextParticle(pRef.current.x + pRef.current.width / 2, pRef.current.y - 15, "ボム切れ! (No Bombs)", "#f43f5e");
+      return;
+    }
+    
+    bombsRef.current--;
+    setBombs(bombsRef.current);
+    bombActiveFramesRef.current = 60; // 1 second of screen shockwaves (60 FPS)
+
+    // Play intense sonic & splat sounds
+    try {
+      audio.playShieldUp();
+      setTimeout(() => {
+        audio.playSplat();
+      }, 70);
+      setTimeout(() => {
+        audio.playSplat();
+      }, 180);
+    } catch (e) {}
+
+    // 1. Clear all ENEMY bullets to save player from direct hits
+    bulletsRef.current = bulletsRef.current.filter((bul) => bul.owner !== BulletOwner.ENEMY);
+
+    // 2. Heavy 220 damage payload to all active mosquitoes
+    let splatCount = 0;
+    const invaders = mosquitoesRef.current;
+    const remainingMosquitoes: Mosquito[] = [];
+    
+    invaders.forEach((mos) => {
+      // Inflict heavy lethal bomb damage
+      mos.hp -= 220;
+      
+      if (mos.hp <= 0) {
+        splatCount++;
+        // Splat explosion of pixel cells
+        spawnExplosionParticles(
+          mos.x + mos.width / 2, 
+          mos.y + mos.height / 2, 
+          ParticleType.BLOOD_SPLAT, 
+          mos.type === MosquitoType.QUEEN_BOSS ? 30 : 10
+        );
+
+        // Give score and combo boost
+        comboCountRef.current++;
+        comboTimerRef.current = 140; 
+        const comboMultiplier = Math.min(5, 1 + Math.floor(comboCountRef.current / 3));
+        const pointGained = mos.points * comboMultiplier;
+        setScore((prev) => prev + pointGained);
+
+        spawnTextParticle(
+          mos.x + mos.width / 2, 
+          mos.y, 
+          `+${pointGained} ${comboMultiplier > 1 ? `x${comboMultiplier} Combo` : ""}`,
+          comboMultiplier > 3 ? "#ef4444" : comboMultiplier > 1 ? "#34d399" : "#facc15"
+        );
+
+        // Drop bonus weapons or recovery items (25% rate)
+        if (Math.random() < 0.25 || mos.type === MosquitoType.QUEEN_BOSS) {
+          const items = [
+            PowerUpType.RECOVERY, 
+            PowerUpType.FIRE_RATE, 
+            PowerUpType.WEAPON_UP, 
+            PowerUpType.KATORI_SHIELD, 
+            PowerUpType.SPRAY_AMMO
+          ];
+          const chosen = items[Math.floor(Math.random() * items.length)];
+          powerupsRef.current.push({
+            id: `pw_bomb_${mos.id}_${Date.now()}`,
+            type: chosen,
+            x: mos.x + mos.width / 2 - 12,
+            y: mos.y + mos.height / 2,
+            width: 24,
+            height: 24,
+            speed: 1.8 + Math.random() * 0.8
+          });
+        }
+      } else {
+        // High HP boss / large mosquito survived
+        spawnExplosionParticles(mos.x + mos.width / 2, mos.y + mos.height / 2, ParticleType.SPARKS, 8);
+        spawnTextParticle(
+          mos.x + mos.width / 2, 
+          mos.y - 12, 
+          `BOMB -220 HP`, 
+          "#fbbf24"
+        );
+        remainingMosquitoes.push(mos);
+      }
+    });
+
+    mosquitoesRef.current = remainingMosquitoes;
+
+    if (splatCount > 0) {
+      spawnTextParticle(
+        CANVAS_WIDTH / 2, 
+        CANVAS_HEIGHT / 2 - 40, 
+        `蚊 ${splatCount} 匹を爆風撲滅！`, 
+        "#fbbf24"
+      );
+    } else {
+      spawnTextParticle(pRef.current.x + pRef.current.width / 2, pRef.current.y - 15, "防空爆波！敵弾一掃", "#38bdf8");
+    }
+
+    // Spawn massive beautiful green cloud of katorisenko incense and spray particles
+    for (let i = 0; i < 45; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 9.5;
+      particlesRef.current.push({
+        id: `earth_bomb_smoke_${Date.now()}_${i}`,
+        x: pRef.current.x + pRef.current.width / 2,
+        y: pRef.current.y + pRef.current.height / 2,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 8 + Math.random() * 12,
+        color: i % 2 === 0 ? "rgba(16, 185, 129, 0.45)" : "rgba(245, 158, 11, 0.45)", // emerald and amber smoke clouds
+        alpha: 1.0,
+        decay: 0.013 + Math.random() * 0.01
+      });
+    }
+  };
+
   // Initialize key handlers once
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Prevent browser scroll with arrows and space inside iframe
-      if (["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD", "KeyE"].includes(e.code)) {
+      if (["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "KeyA", "KeyD", "KeyE", "KeyF"].includes(e.code)) {
         e.preventDefault();
       }
       keysPressed.current[e.code] = true;
@@ -296,6 +422,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             });
           }
         }
+      }
+
+      // Handle custom F Key - 蚊撲滅アースボム
+      if (e.code === "KeyF" && stage === GameStage.PLAYING) {
+        triggerMosquitoBomb();
       }
 
       // Handle Single press action on keydown if needed
@@ -353,6 +484,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     comboTimerRef.current = 0;
     shootCooldownRef.current = 0;
 
+    bombsRef.current = 3;
+    setBombs(3);
+
     if (restartFromWave1) {
       setScore(0);
       setCurrentWave(1);
@@ -375,6 +509,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     bulletsRef.current = [];
     powerupsRef.current = [];
     shieldExpiryRef.current = Math.max(0, shieldExpiryRef.current - 1);
+
+    if (wave > 1) {
+      bombsRef.current = Math.min(5, bombsRef.current + 1);
+      setBombs(bombsRef.current);
+      spawnTextParticle(CANVAS_WIDTH / 2, CANVAS_HEIGHT - 100, "WAVE CLEAR BONUS: ボム+1補給！", "#facc15");
+    }
 
     createBunkers();
 
@@ -1940,6 +2080,57 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.restore();
     });
 
+    // 6.5 Render Mosquito Extermination Bomb expanding shockwaves! (蚊取りアース爆波)
+    if (bombActiveFramesRef.current > 0) {
+      bombActiveFramesRef.current--;
+      
+      const progress = (60 - bombActiveFramesRef.current) / 60; // 0.0 to 1.0 linear progression
+      ctx.save();
+      
+      // Expand rings from player center
+      const px_center = pRef.current.x + pRef.current.width / 2;
+      const py_center = pRef.current.y + pRef.current.height / 2;
+      const maxRadius = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) * 1.5;
+      const currentRadius = progress * maxRadius;
+
+      // Outer primary glowing emerald ring
+      ctx.strokeStyle = `rgba(16, 185, 129, ${1 - progress})`;
+      ctx.lineWidth = 8 + (1 - progress) * 18;
+      ctx.shadowColor = "#10b981";
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(px_center, py_center, currentRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner companion high-energy glowing amber spiral ring
+      ctx.strokeStyle = `rgba(245, 158, 11, ${(1 - progress) * 0.85})`;
+      ctx.lineWidth = 4 + (1 - progress) * 10;
+      ctx.shadowColor = "#f59e0b";
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(px_center, py_center, currentRadius * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Golden high-frequency scanline concentric rings
+      ctx.strokeStyle = `rgba(251, 191, 36, ${(1 - progress) * 0.4})`;
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 0;
+      for (let i = 0; i < 3; i++) {
+        const subRadius = currentRadius * (0.4 + i * 0.25);
+        if (subRadius < maxRadius) {
+          ctx.beginPath();
+          ctx.arc(px_center, py_center, subRadius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      // Dynamic screen-wide full negative high-contrast flash
+      ctx.fillStyle = `rgba(255, 255, 255, ${(1 - progress) * 0.3})`;
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      ctx.restore();
+    }
+
     // 7. Render dynamic stage intro banner overlays
     if (isEnteringStageRef.current && stageBannerTimerRef.current > 0) {
       stageBannerTimerRef.current--;
@@ -2098,6 +2289,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             )}
           </div>
           <span className="text-[10px] text-zinc-500 mt-1 block">3秒間無敵 (使用後2秒クールタイム)</span>
+        </div>
+
+        <div className="border-t border-slate-800 pt-3">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-xs text-zinc-400 uppercase font-sans">蚊撲滅ボム (Fキー / 💥)</span>
+            <span className={`text-xs font-bold ${bombs > 0 ? "text-red-400 animate-pulse" : "text-zinc-500"}`}>
+              残：{bombs} / 5
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <button
+                key={idx}
+                onClick={idx < bombs ? triggerMosquitoBomb : undefined}
+                disabled={stage !== GameStage.PLAYING || idx >= bombs}
+                className={`w-7 h-7 rounded flex items-center justify-center transition-all border ${
+                  idx < bombs 
+                    ? "bg-red-600 hover:bg-red-500 border-red-400 text-sm cursor-pointer shadow-md active:scale-90" 
+                    : "bg-slate-950 border-slate-800 text-zinc-700 text-xs pointer-events-none"
+                }`}
+                title={idx < bombs ? "クリックでアース蚊取り強風ボム発弾！" : "残弾なし"}
+              >
+                {idx < bombs ? "💥" : "・"}
+              </button>
+            ))}
+          </div>
+          <span className="text-[9px] text-zinc-500 mt-1.5 block leading-tight">全敵弾消去 ＆ 画面の全蚊に220の崩壊ダメージ！</span>
         </div>
 
         <div className="border-t border-slate-800 pt-3 flex flex-col gap-1.5 text-xs text-zinc-300">

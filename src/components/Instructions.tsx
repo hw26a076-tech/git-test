@@ -29,7 +29,7 @@ export const Instructions: React.FC<InstructionsProps> = ({ onClose }) => {
             <Swords className="w-5 h-5 text-amber-400" />
             基本操作方法 (CONTROLS)
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm font-sans">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm font-sans">
             <div>
               <p className="mb-2">
                 <span className="font-mono bg-amber-500 text-slate-950 px-2 py-1 rounded font-bold mr-1">A</span> / 
@@ -52,6 +52,14 @@ export const Instructions: React.FC<InstructionsProps> = ({ onClose }) => {
                 <span className="font-mono bg-rose-500 text-white px-3 py-1 rounded font-bold">【E】キー</span>
               </p>
               <span className="text-zinc-400 text-xs">強力なバリア（煙幕結界）を展開する。効果時間: <strong className="text-lime-400">3秒</strong>、クールタイム: <strong className="text-orange-400">2秒</strong>。</span>
+            </div>
+            <div>
+              <p className="mb-2">
+                <span className="font-mono bg-red-600 text-white px-3 py-1 rounded font-bold">【F】キー / 💥</span>
+              </p>
+              <span className="text-zinc-400 text-xs">
+                <strong className="text-red-400 font-bold">アース蚊取り爆弾</strong>。画面全体の敵に220の壊滅ダメージ ＆ 迫りくる敵弾を一瞬で消滅。
+              </span>
             </div>
           </div>
         </div>
