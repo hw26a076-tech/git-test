@@ -1,0 +1,6 @@
+{
+  "name": "蚊インベーダー",
+  "description": "人的被害をもたらす極悪な「蚊」の軍勢と戦う、レトロで中毒性の高いインベーダーゲーム。うちわと蚊取り線香を駆使して、痒み（ダメージ）に耐えながらスコアを競い合え！",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-pixel: "DotGothic16", sans-serif;
+  --font-retro: "Press Start 2P", monospace;
+}
+
+@layer utilities {
+  .bg-radial-gradient-crt {
+    background: radial-gradient(circle, rgba(16,185,129,0) 60%, rgba(0,0,0,0.85) 100%);
+  }
+}
+
+/* Base styling overrides for proper retro gaming look */
+body {
+  background-color: #020617;
+  color: #f8fafc;
+  font-family: "DotGothic16", "Inter", sans-serif;
+}
+
